@@ -162,6 +162,118 @@ def get_wikipedia_summary(city, state):
     return ""
 
 
+def _search_wikipedia_title(query):
+    """Return the best Wikipedia title for a query, or None if no result is found."""
+    if not query:
+        return None
+
+    try:
+        resp = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "opensearch",
+                "search": query,
+                "limit": 1,
+                "namespace": 0,
+                "format": "json",
+            },
+            headers={"User-Agent": "EliseAI-LeadIntel/1.0"},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        titles = resp.json()[1]
+        return titles[0] if titles else None
+    except Exception as e:
+        logger.warning(f"Wikipedia search error for {query}: {e}")
+        return None
+
+
+def get_company_summary(company):
+    """Fetch public company context from Wikipedia when a likely page exists."""
+    title = _search_wikipedia_title(company)
+    if not title:
+        return ""
+
+    try:
+        resp = requests.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{title.replace(' ', '_')}",
+            headers={"User-Agent": "EliseAI-LeadIntel/1.0"},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("type") == "disambiguation":
+                return ""
+            return data.get("extract", "")[:500]
+    except Exception as e:
+        logger.warning(f"Wikipedia company summary error for {company}: {e}")
+    return ""
+
+
+def get_rentcast_property_data(lead):
+    """Fetch property-level data from RentCast when RENTCAST_API_KEY is configured."""
+    api_key = os.getenv("RENTCAST_API_KEY")
+    if not api_key:
+        return {}
+
+    address_parts = [
+        lead.get("property_address", ""),
+        lead.get("city", ""),
+        lead.get("state", ""),
+    ]
+    address = ", ".join(part for part in address_parts if part)
+    if not address:
+        return {}
+
+    try:
+        resp = requests.get(
+            "https://api.rentcast.io/v1/properties",
+            params={"address": address, "limit": 1},
+            headers={"X-Api-Key": api_key, "Accept": "application/json"},
+            timeout=10,
+        )
+        if resp.status_code == 401:
+            logger.warning("RentCast auth failed — check RENTCAST_API_KEY.")
+            return {}
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, dict):
+            records = data.get("properties") or data.get("data") or data.get("results") or []
+        else:
+            records = data
+        if not records:
+            logger.info(f"RentCast returned no property match for {address}")
+            return {}
+
+        prop = records[0]
+        owner = prop.get("owner") or {}
+        owner_names = owner.get("names") or owner.get("name") or []
+        if isinstance(owner_names, list):
+            owner_name = ", ".join(str(name) for name in owner_names[:2])
+        else:
+            owner_name = str(owner_names)
+
+        result = {
+            "rentcast_property_id": prop.get("id", ""),
+            "rentcast_property_type": prop.get("propertyType", ""),
+            "rentcast_bedrooms": prop.get("bedrooms"),
+            "rentcast_bathrooms": prop.get("bathrooms"),
+            "rentcast_square_footage": prop.get("squareFootage"),
+            "rentcast_lot_size": prop.get("lotSize"),
+            "rentcast_year_built": prop.get("yearBuilt"),
+            "rentcast_owner_type": owner.get("type", ""),
+            "rentcast_owner_name": owner_name,
+        }
+        logger.info(
+            f"RentCast property match for {address}: "
+            f"{result.get('rentcast_property_type') or 'unknown type'}"
+        )
+        return {k: v for k, v in result.items() if v not in (None, "")}
+    except Exception as e:
+        logger.warning(f"RentCast property lookup error for {address}: {e}")
+        return {}
+
+
 def enrich_lead(lead):
     """
     Full enrichment pipeline for a single lead.
@@ -170,8 +282,12 @@ def enrich_lead(lead):
     city = lead.get("city", "")
     state = lead.get("state", "")
     address = lead.get("property_address", "")
+    company = lead.get("company", "")
 
     result = {}
+
+    # --- RentCast (property-level data) ---
+    result.update(get_rentcast_property_data(lead))
 
     # --- Census (geocoder → ACS) ---
     state_fips, county_fips = geocode_address(address, city, state)
@@ -191,5 +307,9 @@ def enrich_lead(lead):
     # --- Wikipedia (city context) ---
     wiki = get_wikipedia_summary(city, state)
     result["wikipedia_summary"] = wiki
+
+    # --- Wikipedia (company context) ---
+    company_wiki = get_company_summary(company)
+    result["company_summary"] = company_wiki
 
     return result

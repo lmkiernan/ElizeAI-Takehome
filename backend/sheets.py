@@ -33,7 +33,10 @@ META_COLUMNS = ["lead_key", "processing_started_at"]
 OUTPUT_COLUMNS = [
     "score", "tier", "population", "median_income", "renter_pct",
     "median_rent", "total_housing_units", "unemployment_rate",
-    "email_subject", "email_body", "insights", "processed_at", "status",
+    "rentcast_property_id", "rentcast_property_type", "rentcast_bedrooms",
+    "rentcast_bathrooms", "rentcast_square_footage", "rentcast_lot_size",
+    "rentcast_year_built", "rentcast_owner_type", "rentcast_owner_name",
+    "company_summary", "email_subject", "email_body", "insights", "processed_at", "status",
 ]
 ALL_COLUMNS = INPUT_COLUMNS + OUTPUT_COLUMNS + META_COLUMNS
 RECORDS_CACHE_SECONDS = 15
@@ -150,6 +153,24 @@ def get_all_leads():
         if status == "processing" and not row.get("score") and (not started_at or started_at < stale_cutoff):
             row["status"] = "unprocessed"
     return records
+
+
+def append_lead(lead):
+    """Append a new input lead row using the canonical sheet column layout."""
+    sheet = _get_sheet()
+    headers = _get_headers()
+    lead_key = _lead_identity_key(lead)
+    row = {
+        **{col: lead.get(col, "") for col in INPUT_COLUMNS},
+        "country": lead.get("country") or "US",
+        "status": "unprocessed",
+        "lead_key": lead_key,
+    }
+    values = [row.get(header, "") for header in headers]
+    sheet.append_row(values, value_input_option="USER_ENTERED")
+    _invalidate_records_cache()
+    logger.info(f"Appended lead '{lead.get('name')}' to sheet.")
+    return row
 
 
 def get_unprocessed_leads():
@@ -304,6 +325,16 @@ def write_enriched_lead(row_num, lead, enriched, score_result, outreach):
         "median_rent":         enriched.get("median_rent", ""),
         "total_housing_units": enriched.get("total_housing_units", ""),
         "unemployment_rate":   enriched.get("unemployment_rate", ""),
+        "rentcast_property_id": enriched.get("rentcast_property_id", ""),
+        "rentcast_property_type": enriched.get("rentcast_property_type", ""),
+        "rentcast_bedrooms": enriched.get("rentcast_bedrooms", ""),
+        "rentcast_bathrooms": enriched.get("rentcast_bathrooms", ""),
+        "rentcast_square_footage": enriched.get("rentcast_square_footage", ""),
+        "rentcast_lot_size": enriched.get("rentcast_lot_size", ""),
+        "rentcast_year_built": enriched.get("rentcast_year_built", ""),
+        "rentcast_owner_type": enriched.get("rentcast_owner_type", ""),
+        "rentcast_owner_name": enriched.get("rentcast_owner_name", ""),
+        "company_summary":      enriched.get("company_summary", ""),
         "email_subject":       outreach.get("subject", ""),
         "email_body":          outreach.get("body", ""),
         "insights":            " | ".join(outreach.get("insights", [])),

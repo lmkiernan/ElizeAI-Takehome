@@ -11,6 +11,7 @@ from enrichment import enrich_lead
 from outreach import generate_outreach
 from scoring import score_lead
 from sheets import (
+    append_lead,
     copy_duplicate_outputs,
     ensure_headers,
     get_all_leads,
@@ -122,6 +123,12 @@ def get_leads():
                     "renter_pct":          _to_num(lead.get("renter_pct")),
                     "total_housing_units": _to_num(lead.get("total_housing_units")),
                     "unemployment_rate":   _to_num(lead.get("unemployment_rate")),
+                    "rentcast_property_id": lead.get("rentcast_property_id"),
+                    "rentcast_property_type": lead.get("rentcast_property_type"),
+                    "rentcast_bedrooms": _to_num(lead.get("rentcast_bedrooms")),
+                    "rentcast_square_footage": _to_num(lead.get("rentcast_square_footage")),
+                    "rentcast_year_built": _to_num(lead.get("rentcast_year_built")),
+                    "rentcast_owner_type": lead.get("rentcast_owner_type"),
                 }
                 lead["scoreBreakdown"] = score_lead(enriched_subset)["breakdown"]
 
@@ -139,6 +146,21 @@ def get_leads():
         return jsonify({"leads": leads})
     except Exception as e:
         logger.error(f"/api/leads error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/leads")
+def create_lead():
+    """Append a new lead to the Google Sheet. Frontend auto-processing handles it after insert."""
+    lead = request.get_json()
+    if not lead or not lead.get("name") or not lead.get("city") or not lead.get("state"):
+        return jsonify({"error": "name, city, and state are required"}), 400
+
+    try:
+        created = append_lead(lead)
+        return jsonify(created), 201
+    except Exception as e:
+        logger.error(f"/api/leads append error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

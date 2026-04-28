@@ -34,6 +34,12 @@ def generate_outreach(lead, enriched, score_result):
     total_units = enriched.get("total_housing_units", 0)
     unemployment = enriched.get("unemployment_rate")
     wiki = enriched.get("wikipedia_summary", "")[:400]
+    company_summary = enriched.get("company_summary", "")[:500]
+    rentcast_type = enriched.get("rentcast_property_type")
+    rentcast_bedrooms = enriched.get("rentcast_bedrooms")
+    rentcast_sqft = enriched.get("rentcast_square_footage")
+    rentcast_year = enriched.get("rentcast_year_built")
+    rentcast_owner_type = enriched.get("rentcast_owner_type")
 
     prompt = f"""You are an SDR at EliseAI, an AI-powered leasing automation platform built for multifamily property managers.
 
@@ -59,8 +65,18 @@ ENRICHED MARKET DATA ({lead.get("city")}, {lead.get("state")} — county level):
 - Total Housing Units: {total_units:,}
 - State Unemployment: {f"{unemployment}%" if unemployment else "N/A"}
 
+PROPERTY DATA (RentCast, if found):
+- Property Type: {rentcast_type or "N/A"}
+- Bedrooms: {rentcast_bedrooms if rentcast_bedrooms is not None else "N/A"}
+- Square Footage: {f"{rentcast_sqft:,}" if rentcast_sqft else "N/A"}
+- Year Built: {rentcast_year or "N/A"}
+- Owner Type: {rentcast_owner_type or "N/A"}
+
 CITY CONTEXT (Wikipedia):
 {wiki if wiki else "No additional context available."}
+
+COMPANY CONTEXT (Wikipedia, if found):
+{company_summary if company_summary else "No public company summary found."}
 
 LEAD SCORE: {score_result["score"]}/100 — Tier: {score_result["tier"]}
 
@@ -74,6 +90,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 EMAIL RULES:
 - Address {first_name} by first name
 - Reference 2–3 specific data points from the market data above (naturally, not as a data dump)
+- If company context is available and clearly relevant, use it for one natural personalization line
 - 150–200 words max for the body
 - Conversational tone — no buzzwords, no corporate speak
 - Single clear CTA: offer a 20-minute call this week
@@ -82,6 +99,7 @@ EMAIL RULES:
 INSIGHTS RULES (for the sales rep, not the prospect):
 - Each insight should be specific and reference actual numbers from the enriched data
 - Flag whether this is a strong/weak fit and WHY based on the data
+- Use RentCast property data when available to explain whether this specific property looks like a fit
 - Note anything that makes this market or company especially interesting or concerning
 - Keep each insight to 1–2 sentences"""
 
