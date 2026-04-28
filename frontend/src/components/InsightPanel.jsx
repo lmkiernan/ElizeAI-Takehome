@@ -1,4 +1,4 @@
-import { Users, DollarSign, Home, Building2, Activity } from 'lucide-react'
+import { Users, DollarSign, Home, Building2, Activity, Ruler, Calendar } from 'lucide-react'
 import ScoreBadge from './ScoreBadge'
 
 function ScoreBar({ label, score, max }) {
@@ -76,6 +76,24 @@ export default function InsightPanel({ lead }) {
           <Metric icon={Activity} label="Unemployment" value={lead.unemployment_rate != null ? `${lead.unemployment_rate}%` : null} sub="· FRED API" />
         </div>
       </section>
+
+      {/* Property data */}
+      {lead.rentcast_property_id && (
+        <section>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Property
+            <span className="ml-2 normal-case font-normal text-slate-300">· RentCast API</span>
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric icon={Building2} label="Property Type" value={lead.rentcast_property_type || null} />
+            <Metric icon={Home} label="Bedrooms" value={fmt(lead.rentcast_bedrooms)} />
+            <Metric icon={Ruler} label="Square Footage" value={fmt(lead.rentcast_square_footage)} />
+            <Metric icon={Calendar} label="Year Built" value={lead.rentcast_year_built ?? null} />
+            <Metric icon={Users} label="Owner Type" value={lead.rentcast_owner_type || null} />
+            <Metric icon={Building2} label="Owner" value={lead.rentcast_owner_name || null} />
+          </div>
+        </section>
+      )}
 
       {/* Sales insights */}
       <section>

@@ -116,15 +116,7 @@ export default function App() {
   }
 
   function handleLeadsProcessed(newLeads) {
-    setLeads(prev => {
-      const updated = [...prev]
-      newLeads.forEach(r => {
-        const idx = updated.findIndex(l => l.id === r.id)
-        if (idx >= 0) updated[idx] = r
-        else updated.push(r)
-      })
-      return updated
-    })
+    setLeads(newLeads)
     setView('kanban')
   }
 
